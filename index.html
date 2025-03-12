@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proxy Browser</title>
+</head>
+<body>
+<h1>Proxy Browser</h1>
+
+<!-- URL入力フォーム -->
+<form id="proxyForm">
+    <input type="url" id="urlInput" placeholder="URLを入力してください">
+    <button type="submit">アクセスする</button>
+</form>
+
+<!-- ウェブページ表示エリア -->
+<iframe id="webPageFrame" width="100%" height="600"></iframe>
+
+<!-- JavaScript -->
+<script>
+// フォームのサブミット時の処理
+document.getElementById("proxyForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+    const url = document.getElementById("urlInput").value;
+    if (url) {
+        loadWebPage(url);
+    }
+});
+
+// ウェブページを読み込む関数
+function loadWebPage(url) {
+    // CORSを回避するためのプロキシサーバーのURL
+    const proxyUrl = "https://api.allorigins.win/raw?url=";
+    // プロキシ経由でウェブページを読み込む
+    const apiUrl = proxyUrl + encodeURIComponent(url);
+    fetch(apiUrl)
+        .then(response => response.text())
+        .then(data => {
+            // 取得したHTMLを解析してリダイレクト先のURLを取得
+            const redirectedUrl = parseRedirect(data);
+            if (redirectedUrl) {
+                // リダイレクト先がある場合は再度読み込む
+                loadWebPage(redirectedUrl);
+            } else {
+                // 取得したHTMLをiframeに表示
+                document.getElementById("webPageFrame").srcdoc = data;
+            }
+        })
+        .catch(error => console.error("Error fetching web page:", error));
+}
+
+// リダイレクト先を解析する関数
+function parseRedirect(html) {
+    const match = html.match(/<meta\s+http-equiv=["']refresh["']\s+content=["']\d+;\s*url=([^"']+)["']/i);
+    if (match && match[1]) {
+        return match[1];
+    }
+    return null;
+}
+</script>
+
+<!-- 追加コード: 基のURL表示と強化機能 -->
+<script>
+(function(){
+    // ローディングインジケーターの要素を作成してbodyに追加
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.id = "loadingIndicator";
+    loadingIndicator.style.position = "fixed";
+    loadingIndicator.style.top = "50%";
+    loadingIndicator.style.left = "50%";
+    loadingIndicator.style.transform = "translate(-50%, -50%)";
+    loadingIndicator.style.backgroundColor = "rgba(0, 0, 0, 0.7)";
+    loadingIndicator.style.color = "#fff";
+    loadingIndicator.style.padding = "10px 20px";
+    loadingIndicator.style.borderRadius = "5px";
+    loadingIndicator.style.zIndex = "1000";
+    loadingIndicator.style.display = "none";
+    loadingIndicator.textContent = "Loading...";
+    document.body.appendChild(loadingIndicator);
+
+    // loadWebPage関数の元の処理を保持し、ラップすることで現在のURLを記憶
+    const originalLoadWebPage = loadWebPage;
+    window.currentUrl = "";
+    loadWebPage = function(url) {
+        window.currentUrl = url;
+        loadingIndicator.style.display = "block";
+        originalLoadWebPage(url);
+    };
+
+    // iframeのロード完了時にローディングインジケーターを非表示にし、<base>タグを注入
+    document.getElementById("webPageFrame").addEventListener("load", function() {
+        loadingIndicator.style.display = "none";
+        try {
+            const iframeDoc = this.contentDocument || this.contentWindow.document;
+            if (iframeDoc && iframeDoc.head) {
+                // 既に<base>タグが存在しない場合のみ追加
+                if (!iframeDoc.querySelector("base")) {
+                    const base = iframeDoc.createElement("base");
+                    // currentUrlには、最終的に読み込んだURLが入っているはずです
+                    base.href = window.currentUrl || "";
+                    // headの先頭に挿入
+                    iframeDoc.head.insertBefore(base, iframeDoc.head.firstChild);
+                }
+            }
+        } catch (e) {
+            console.error("Error injecting base tag:", e);
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
